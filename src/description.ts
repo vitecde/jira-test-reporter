@@ -354,6 +354,15 @@ const createCodeBlock = (text: string, language: string = 'text') => ({
 })
 
 /**
+ * Creates a collapsible expand node with the given title and block content
+ */
+const createExpand = (title: string, content: any[]) => ({
+  type: 'expand',
+  attrs: { title },
+  content,
+})
+
+/**
  * Configuration for each table header
  */
 const TABLE_HEADER_CONFIG: Record<
@@ -703,10 +712,9 @@ export const buildDescription = (
         content.push(createCodeBlock(test.message))
       }
 
-      // Stack trace
+      // Stack trace — rendered inside a collapsible expand
       if (test.trace) {
-        content.push(createHeadingNode('Stack Trace', 5))
-        content.push(createCodeBlock(test.trace))
+        content.push(createExpand('Stack Trace', [createCodeBlock(test.trace)]))
       }
 
       // AI analysis — added by ai-ctrf, not part of the standard CTRF schema.
@@ -714,8 +722,9 @@ export const buildDescription = (
       // The ai field is a plain string produced by ai-ctrf.
       const ai = (test as any).ai as string | undefined
       if (ai) {
-        content.push(createHeadingNode('AI Analysis', 5))
-        content.push(createParagraphNode([createTextNode(ai)]))
+        content.push(
+          createExpand('AI Analysis', [createParagraphNode([createTextNode(ai)])])
+        )
       }
     })
   }
