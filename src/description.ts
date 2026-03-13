@@ -711,21 +711,11 @@ export const buildDescription = (
 
       // AI analysis — added by ai-ctrf, not part of the standard CTRF schema.
       // We access it via a type assertion so the standard CtrfTest type is unchanged.
-      const ai = (test as any).ai as
-        | { summary?: string; body?: string }
-        | undefined
-      if (ai?.summary || ai?.body) {
+      // The ai field is a plain string produced by ai-ctrf.
+      const ai = (test as any).ai as string | undefined
+      if (ai) {
         content.push(createHeadingNode('AI Analysis', 5))
-        if (ai.summary) {
-          content.push(
-            createParagraphNode([
-              { type: 'text', text: ai.summary, marks: [{ type: 'em' }] },
-            ])
-          )
-        }
-        if (ai.body) {
-          content.push(createParagraphNode([createTextNode(ai.body)]))
-        }
+        content.push(createParagraphNode([createTextNode(ai)]))
       }
     })
   }
@@ -745,6 +735,13 @@ export const buildDescription = (
     })
 
     content.push(createBulletList(flakyItems))
+  }
+
+  // Overall AI summary — added by ai-ctrf in results.extra.ai
+  const overallAi = (results as any).extra?.ai as string | undefined
+  if (overallAi) {
+    content.push(createHeadingNode('AI Summary', 3))
+    content.push(createParagraphNode([createTextNode(overallAi)]))
   }
 
   if (suffix) {
