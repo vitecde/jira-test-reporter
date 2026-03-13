@@ -706,10 +706,9 @@ export const buildDescription = (
         createHeadingNode(suite ? `${test.name} (${suite})` : test.name, 4)
       )
 
-      // Failure message
+      // Failure message — rendered inside a collapsible expand
       if (test.message) {
-        content.push(createHeadingNode('Failure Message', 5))
-        content.push(createCodeBlock(test.message))
+        content.push(createExpand('Failure Message', [createCodeBlock(test.message)]))
       }
 
       // Stack trace — rendered inside a collapsible expand
