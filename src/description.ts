@@ -686,22 +686,63 @@ export const buildDescription = (
     content.push(createHeadingNode('Failed Tests', 3))
 
     const failedTests = results.tests.filter((test) => test.status === 'failed')
-    const failedItems = failedTests.map((test) =>
-      createBulletListItem(
-        `${test.name}${test.suite ? ` (${test.suite})` : ''}`
-      )
-    )
+    failedTests.forEach((test) => {
+      const rawSuite = (test as any).suite
+      const suite: string | undefined = Array.isArray(rawSuite)
+        ? (rawSuite as string[]).join(' > ')
+        : (rawSuite as string | undefined)
 
-    content.push(createBulletList(failedItems))
+      // Test name (with suite) as a sub-heading
+      content.push(
+        createHeadingNode(suite ? `${test.name} (${suite})` : test.name, 4)
+      )
+
+      // Failure message
+      if (test.message) {
+        content.push(createHeadingNode('Failure Message', 5))
+        content.push(createCodeBlock(test.message))
+      }
+
+      // Stack trace
+      if (test.trace) {
+        content.push(createHeadingNode('Stack Trace', 5))
+        content.push(createCodeBlock(test.trace))
+      }
+
+      // AI analysis — added by ai-ctrf, not part of the standard CTRF schema.
+      // We access it via a type assertion so the standard CtrfTest type is unchanged.
+      const ai = (test as any).ai as
+        | { summary?: string; body?: string }
+        | undefined
+      if (ai?.summary || ai?.body) {
+        content.push(createHeadingNode('AI Analysis', 5))
+        if (ai.summary) {
+          content.push(
+            createParagraphNode([
+              { type: 'text', text: ai.summary, marks: [{ type: 'em' }] },
+            ])
+          )
+        }
+        if (ai.body) {
+          content.push(createParagraphNode([createTextNode(ai.body)]))
+        }
+      }
+    })
   }
 
   const flakyTests = results.tests.filter((test) => test.flaky)
   if (flakyTests.length > 0) {
     content.push(createHeadingNode('Flaky Tests', 3))
 
-    const flakyItems = flakyTests.map((test) =>
-      createBulletListItem(`${test.name} (${test.retries || 0} retries)`)
-    )
+    const flakyItems = flakyTests.map((test) => {
+      const rawSuite = (test as any).suite
+      const suite: string | undefined = Array.isArray(rawSuite)
+        ? (rawSuite as string[]).join(' > ')
+        : (rawSuite as string | undefined)
+      return createBulletListItem(
+        `${test.name}${suite ? ` (${suite})` : ''} — ${test.retries ?? 0} retries`
+      )
+    })
 
     content.push(createBulletList(flakyItems))
   }
