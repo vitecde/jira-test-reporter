@@ -363,6 +363,21 @@ const createExpand = (title: string, content: any[]) => ({
 })
 
 /**
+ * Creates a panel (callout box) with the given panelType and block content.
+ * Valid panelTypes: 'info' | 'note' | 'warning' | 'success' | 'error'
+ */
+const createPanel = (panelType: string, content: any[]) => ({
+  type: 'panel',
+  attrs: { panelType },
+  content,
+})
+
+/**
+ * Creates a horizontal rule (section divider)
+ */
+const createRule = () => ({ type: 'rule' })
+
+/**
  * Configuration for each table header
  */
 const TABLE_HEADER_CONFIG: Record<
@@ -653,7 +668,14 @@ export const buildDescription = (
     (environment.buildName || environment.buildNumber) &&
     environment.buildUrl
   ) {
-    // Create a linked build name/number
+    // Build a label from whichever parts are present, avoiding "undefined" strings
+    const buildLabel = [
+      environment.buildName,
+      environment.buildNumber ? '#' + environment.buildNumber : undefined,
+    ]
+      .filter(Boolean)
+      .join(' ')
+
     content.push({
       type: 'heading',
       attrs: { level: 3 },
@@ -661,7 +683,7 @@ export const buildDescription = (
         { type: 'text', text: 'Build: ' },
         {
           type: 'text',
-          text: environment.buildName + ' #' + environment.buildNumber,
+          text: buildLabel,
           marks: [
             {
               type: 'link',
@@ -692,10 +714,11 @@ export const buildDescription = (
   }
 
   if (!isFlaky && summary.failed > 0) {
+    content.push(createRule())
     content.push(createHeadingNode('Failed Tests', 3))
 
     const failedTests = results.tests.filter((test) => test.status === 'failed')
-    failedTests.forEach((test) => {
+    failedTests.forEach((test, index) => {
       const rawSuite = (test as any).suite
       const suite: string | undefined = Array.isArray(rawSuite)
         ? (rawSuite as string[]).join(' > ')
@@ -706,9 +729,11 @@ export const buildDescription = (
         createHeadingNode(suite ? `${test.name} (${suite})` : test.name, 4)
       )
 
-      // Failure message — rendered inside a collapsible expand
+      // Failure message — rendered as an error panel for immediate visibility
       if (test.message) {
-        content.push(createExpand('Failure Message', [createCodeBlock(test.message)]))
+        content.push(
+          createPanel('error', [createParagraphNode([createTextNode(test.message)])])
+        )
       }
 
       // Stack trace — rendered inside a collapsible expand
@@ -725,11 +750,17 @@ export const buildDescription = (
           createExpand('AI Analysis', [createParagraphNode([createTextNode(ai)])])
         )
       }
+
+      // Divider between tests (not after the last one)
+      if (index < failedTests.length - 1) {
+        content.push(createRule())
+      }
     })
   }
 
   const flakyTests = results.tests.filter((test) => test.flaky)
   if (flakyTests.length > 0) {
+    content.push(createRule())
     content.push(createHeadingNode('Flaky Tests', 3))
 
     const flakyItems = flakyTests.map((test) => {
@@ -748,6 +779,7 @@ export const buildDescription = (
   // Overall AI summary — added by ai-ctrf in results.extra.ai
   const overallAi = (results as any).extra?.ai as string | undefined
   if (overallAi) {
+    content.push(createRule())
     content.push(createHeadingNode('AI Summary', 3))
     content.push(createParagraphNode([createTextNode(overallAi)]))
   }
