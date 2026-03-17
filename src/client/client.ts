@@ -38,28 +38,22 @@ export interface JiraIssuePayload {
 
 export const postJiraIssue = async (
   payload: JiraIssuePayload
-): Promise<void> => {
+): Promise<string> => {
   const jiraApiUrl = process.env.JIRA_URL
   const jiraApiToken = process.env.JIRA_API_TOKEN
   const jiraEmail = process.env.JIRA_EMAIL
 
   if (!jiraApiUrl) {
-    await Promise.reject(
-      new Error('JIRA_URL is not defined in the environment variables')
-    )
-    return
+    throw new Error('JIRA_URL is not defined in the environment variables')
   }
 
   if (!jiraEmail || !jiraApiToken) {
-    await Promise.reject(
-      new Error(
-        'JIRA_EMAIL and/or JIRA_API_TOKEN are not defined in the environment variables'
-      )
+    throw new Error(
+      'JIRA_EMAIL and/or JIRA_API_TOKEN are not defined in the environment variables'
     )
-    return
   }
 
-  await new Promise<void>((resolve, reject) => {
+  return await new Promise<string>((resolve, reject) => {
     const url = new URL(`${jiraApiUrl}/rest/api/3/issue`)
     const data = JSON.stringify(payload)
     const auth = Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString('base64')
@@ -82,8 +76,9 @@ export const postJiraIssue = async (
       })
       res.on('end', () => {
         if (res.statusCode === 201) {
-          console.log('Successfully created Jira issue')
-          resolve()
+          const parsed = JSON.parse(response) as { key: string }
+          console.log(`Successfully created Jira issue: ${parsed.key}`)
+          resolve(parsed.key)
         } else {
           reject(
             new Error(

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from 'fs'
 import yargs from 'yargs/yargs'
 import { hideBin } from 'yargs/helpers'
 import { parseCtrfFile } from './ctrf-parser'
@@ -84,6 +85,12 @@ const sharedOptions = {
       'Comma-separated list of table headers to include (tests,passed,failed,skipped,pending,other,flaky,duration)',
     type: 'string',
   },
+  updateCtrf: {
+    describe:
+      'Write the created Jira issue key and URL back into results.extra of the CTRF JSON file',
+    type: 'boolean',
+    default: false,
+  },
 } as const
 
 const argv = yargs(hideBin(process.argv))
@@ -124,9 +131,21 @@ const argv = yargs(hideBin(process.argv))
           tableHeaders: argv.tableHeaders
             ? (argv.tableHeaders.split(',') as any)
             : undefined,
+          updateCtrf: argv.updateCtrf as boolean,
         }
 
-        await postResultsToJira(report, options, true)
+        const issueKey = await postResultsToJira(report, options, true)
+        if (argv.updateCtrf && issueKey) {
+          const jiraUrl = process.env.JIRA_URL!
+          const jiraIssueUrl = `${jiraUrl.replace(/\/+$/, '')}/browse/${issueKey}`
+          report.results.extra = {
+            ...report.results.extra,
+            jiraIssue: issueKey,
+            jiraIssueUrl,
+          }
+          fs.writeFileSync(argv.path, JSON.stringify(report, null, 2))
+          console.log(`Jira issue URL written to CTRF: ${jiraIssueUrl}`)
+        }
       } catch (error: any) {
         console.error('Error:', error.message)
         process.exit(1)
@@ -177,9 +196,21 @@ const argv = yargs(hideBin(process.argv))
           tableHeaders: argv.tableHeaders
             ? (argv.tableHeaders.split(',') as any)
             : undefined,
+          updateCtrf: argv.updateCtrf as boolean,
         }
 
-        await postFlakyTestsToJira(report, options, true)
+        const issueKey = await postFlakyTestsToJira(report, options, true)
+        if (argv.updateCtrf && issueKey) {
+          const jiraUrl = process.env.JIRA_URL!
+          const jiraIssueUrl = `${jiraUrl.replace(/\/+$/, '')}/browse/${issueKey}`
+          report.results.extra = {
+            ...report.results.extra,
+            jiraIssue: issueKey,
+            jiraIssueUrl,
+          }
+          fs.writeFileSync(argv.path, JSON.stringify(report, null, 2))
+          console.log(`Jira issue URL written to CTRF: ${jiraIssueUrl}`)
+        }
       } catch (error: any) {
         console.error('Error:', error.message)
         process.exit(1)

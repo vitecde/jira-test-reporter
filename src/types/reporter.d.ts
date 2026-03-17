@@ -23,4 +23,5 @@ export interface Options {
   fixVersions?: string[]
   debug?: boolean
   tableHeaders?: TableHeader[]
+  updateCtrf?: boolean
 }

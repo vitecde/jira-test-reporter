@@ -10,7 +10,7 @@ export async function postResultsToJira(
   report: Report,
   options: Options = {},
   logs: boolean = false
-): Promise<void> {
+): Promise<string | null> {
   try {
     if (
       !options.onFailOnly ||
@@ -20,16 +20,18 @@ export async function postResultsToJira(
       if (logs) {
         console.log('Posting test results to Jira...')
       }
-      await postJiraIssue(resultsPayload)
+      const issueKey = await postJiraIssue(resultsPayload)
       if (logs) {
         console.log('Successfully posted test results to Jira')
       }
+      return issueKey
     } else {
       if (logs) {
         console.log(
           'Skipping posting test results to Jira as onFailOnly is true and there are no failed tests'
         )
       }
+      return null
     }
   } catch (error) {
     if (logs) {
@@ -43,18 +45,20 @@ export async function postFlakyTestsToJira(
   report: Report,
   options: Options = {},
   logs: boolean = false
-): Promise<void> {
+): Promise<string | null> {
   try {
     const flakyPayload = formatFlakyTestsMessage(report, options)
     if (flakyPayload) {
       if (logs) {
         console.log('Posting flaky tests to Jira...')
       }
-      await postJiraIssue(flakyPayload)
+      const issueKey = await postJiraIssue(flakyPayload)
       if (logs) {
         console.log('Successfully posted flaky tests to Jira')
       }
+      return issueKey
     }
+    return null
   } catch (error) {
     if (logs) {
       console.error('Error posting to Jira:', error)
