@@ -91,6 +91,12 @@ const sharedOptions = {
     type: 'boolean',
     default: false,
   },
+  updateIssue: {
+    describe:
+      'Update existing Jira issue if jiraIssue key is present in CTRF extra field (use --no-update-issue to always create a new issue)',
+    type: 'boolean',
+    default: true,
+  },
 } as const
 
 const argv = yargs(hideBin(process.argv))
@@ -132,6 +138,7 @@ const argv = yargs(hideBin(process.argv))
             ? (argv.tableHeaders.split(',') as any)
             : undefined,
           updateCtrf: argv.updateCtrf as boolean,
+          updateIssue: argv.updateIssue as boolean,
         }
 
         const issueKey = await postResultsToJira(report, options, true)
@@ -197,19 +204,20 @@ const argv = yargs(hideBin(process.argv))
             ? (argv.tableHeaders.split(',') as any)
             : undefined,
           updateCtrf: argv.updateCtrf as boolean,
+          updateIssue: argv.updateIssue as boolean,
         }
 
         const issueKey = await postFlakyTestsToJira(report, options, true)
         if (argv.updateCtrf && issueKey) {
           const jiraUrl = process.env.JIRA_URL!
-          const jiraIssueUrl = `${jiraUrl.replace(/\/+$/, '')}/browse/${issueKey}`
+          const jiraFlakyIssueUrl = `${jiraUrl.replace(/\/+$/, '')}/browse/${issueKey}`
           report.results.extra = {
             ...report.results.extra,
-            jiraIssue: issueKey,
-            jiraIssueUrl,
+            jiraFlakyIssue: issueKey,
+            jiraFlakyIssueUrl,
           }
           fs.writeFileSync(argv.path, JSON.stringify(report, null, 2))
-          console.log(`Jira issue URL written to CTRF: ${jiraIssueUrl}`)
+          console.log(`Jira flaky issue URL written to CTRF: ${jiraFlakyIssueUrl}`)
         }
       } catch (error: any) {
         console.error('Error:', error.message)
