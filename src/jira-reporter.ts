@@ -25,7 +25,7 @@ export async function postResultsToJira(
         }
         await updateJiraIssue(existingKey!, resultsPayload)
         if (logs) {
-          console.log(`Successfully updated Jira issue ${existingKey}`)
+          console.log('Successfully posted test results to Jira')
         }
         return existingKey!
       } else {
@@ -70,7 +70,7 @@ export async function postFlakyTestsToJira(
         }
         await updateJiraIssue(existingKey!, flakyPayload)
         if (logs) {
-          console.log(`Successfully updated Jira issue ${existingKey}`)
+          console.log('Successfully posted flaky tests to Jira')
         }
         return existingKey!
       } else {
