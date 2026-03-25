@@ -602,6 +602,13 @@ const DEFAULT_TABLE_HEADERS: TableHeader[] = [
   'duration',
 ]
 
+/** Jira description field limit in characters (JSON-encoded ADF). Jira Cloud enforces 32 767; use 32 000 to leave a buffer. */
+const JIRA_DESCRIPTION_LIMIT = 32_000
+
+/** Returns the JSON-stringified character length of a candidate ADF document. */
+const adfSize = (content: any[]): number =>
+  JSON.stringify({ version: 1, type: 'doc', content }).length
+
 export const buildDescription = (
   ctrf: Report,
   options?: Options
@@ -713,55 +720,14 @@ export const buildDescription = (
     )
   }
 
-  if (!isFlaky && summary.failed > 0) {
-    content.push(createRule())
-    content.push(createHeadingNode('Failed Tests', 3))
-
-    const failedTests = results.tests.filter((test) => test.status === 'failed')
-    failedTests.forEach((test, index) => {
-      const rawSuite = (test as any).suite
-      const suite: string | undefined = Array.isArray(rawSuite)
-        ? (rawSuite as string[]).join(' > ')
-        : (rawSuite as string | undefined)
-
-      // Test name (with suite) as a sub-heading
-      content.push(
-        createHeadingNode(suite ? `${test.name} (${suite})` : test.name, 4)
-      )
-
-      // Failure message — rendered as an error panel for immediate visibility
-      if (test.message) {
-        content.push(
-          createPanel('error', [createParagraphNode([createTextNode(test.message)])])
-        )
-      }
-
-      // Stack trace — rendered inside a collapsible expand
-      if (test.trace) {
-        content.push(createExpand('Stack Trace', [createCodeBlock(test.trace)]))
-      }
-
-      // AI analysis — added by ai-ctrf, not part of the standard CTRF schema.
-      // We access it via a type assertion so the standard CtrfTest type is unchanged.
-      // The ai field is a plain string produced by ai-ctrf.
-      const ai = (test as any).ai as string | undefined
-      if (ai) {
-        content.push(
-          createExpand('AI Analysis', [createParagraphNode([createTextNode(ai)])])
-        )
-      }
-
-      // Divider between tests (not after the last one)
-      if (index < failedTests.length - 1) {
-        content.push(createRule())
-      }
-    })
-  }
+  // Pre-build suffix nodes (flaky, AI summary, optional suffix text, footer) so their
+  // size is known before we start filling in the failed-test details.
+  const suffixNodes: any[] = []
 
   const flakyTests = results.tests.filter((test) => test.flaky)
   if (flakyTests.length > 0) {
-    content.push(createRule())
-    content.push(createHeadingNode('Flaky Tests', 3))
+    suffixNodes.push(createRule())
+    suffixNodes.push(createHeadingNode('Flaky Tests', 3))
 
     const flakyItems = flakyTests.map((test) => {
       const rawSuite = (test as any).suite
@@ -773,22 +739,22 @@ export const buildDescription = (
       )
     })
 
-    content.push(createBulletList(flakyItems))
+    suffixNodes.push(createBulletList(flakyItems))
   }
 
   // Overall AI summary — added by ai-ctrf in results.extra.ai
   const overallAi = (results as any).extra?.ai as string | undefined
   if (overallAi) {
-    content.push(createRule())
-    content.push(createHeadingNode('AI Summary', 3))
-    content.push(createParagraphNode([createTextNode(overallAi)]))
+    suffixNodes.push(createRule())
+    suffixNodes.push(createHeadingNode('AI Summary', 3))
+    suffixNodes.push(createParagraphNode([createTextNode(overallAi)]))
   }
 
   if (suffix) {
-    content.push(createParagraphNode([createTextNode(suffix)]))
+    suffixNodes.push(createParagraphNode([createTextNode(suffix)]))
   }
 
-  content.push(
+  suffixNodes.push(
     createParagraphNode([
       {
         type: 'text',
@@ -825,6 +791,76 @@ export const buildDescription = (
       },
     ])
   )
+
+  if (!isFlaky && summary.failed > 0) {
+    content.push(createRule())
+    content.push(createHeadingNode('Failed Tests', 3))
+
+    const failedTests = results.tests.filter((test) => test.status === 'failed')
+    let addedFailedCount = 0
+
+    for (const test of failedTests) {
+      const rawSuite = (test as any).suite
+      const suite: string | undefined = Array.isArray(rawSuite)
+        ? (rawSuite as string[]).join(' > ')
+        : (rawSuite as string | undefined)
+
+      // Build this test's nodes (without a separator rule)
+      const testNodes: any[] = []
+
+      // Test name (with suite) as a sub-heading
+      testNodes.push(createHeadingNode(suite ? `${test.name} (${suite})` : test.name, 4))
+
+      // Failure message — rendered as an error panel for immediate visibility
+      if (test.message) {
+        testNodes.push(
+          createPanel('error', [createParagraphNode([createTextNode(test.message)])])
+        )
+      }
+
+      // Stack trace — rendered inside a collapsible expand
+      if (test.trace) {
+        testNodes.push(createExpand('Stack Trace', [createCodeBlock(test.trace)]))
+      }
+
+      // AI analysis — added by ai-ctrf, not part of the standard CTRF schema.
+      // We access it via a type assertion so the standard CtrfTest type is unchanged.
+      // The ai field is a plain string produced by ai-ctrf.
+      const ai = (test as any).ai as string | undefined
+      if (ai) {
+        testNodes.push(
+          createExpand('AI Analysis', [createParagraphNode([createTextNode(ai)])])
+        )
+      }
+
+      // A horizontal rule is added before each test except the very first one
+      const separator: any[] = addedFailedCount > 0 ? [createRule()] : []
+
+      // Check whether adding this test (plus separator and suffix) still fits within the Jira limit
+      if (adfSize([...content, ...separator, ...testNodes, ...suffixNodes]) <= JIRA_DESCRIPTION_LIMIT) {
+        content.push(...separator, ...testNodes)
+        addedFailedCount++
+      } else {
+        // No room for this test — stop here
+        break
+      }
+    }
+
+    // If any tests were omitted, add a truncation note so the reader knows
+    if (addedFailedCount < failedTests.length) {
+      const skipped = failedTests.length - addedFailedCount
+      content.push(
+        createParagraphNode([
+          createTextNode(
+            `… and ${skipped} more failing test${skipped === 1 ? '' : 's'} (description truncated to stay within Jira limits)`
+          ),
+        ])
+      )
+    }
+  }
+
+  // Append the pre-built suffix (flaky tests, AI summary, footer)
+  content.push(...suffixNodes)
 
   return {
     version: 1,
