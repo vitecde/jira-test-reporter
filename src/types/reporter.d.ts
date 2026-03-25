@@ -26,4 +26,5 @@ export interface Options {
   tableHeaders?: TableHeader[]
   updateCtrf?: boolean
   updateIssue?: boolean
+  newFailuresOnly?: boolean
 }

@@ -605,6 +605,17 @@ const DEFAULT_TABLE_HEADERS: TableHeader[] = [
 /** Jira description field limit in characters (JSON-encoded ADF). Jira Cloud enforces 32 767; use 32 000 to leave a buffer. */
 const JIRA_DESCRIPTION_LIMIT = 32_000
 
+/**
+ * Returns true when a failed test is a "new" failure (should be posted to Jira):
+ *   - no `insights` at all → first-ever run (add-insights was skipped) → treat as new
+ *   - `insights.extra.totalResultsFailed === 1` → failing now but never failed in any prior run → new
+ *   - `insights.extra.totalResultsFailed > 1`  → also failed in ≥1 prior run → recurring, suppress
+ */
+const isNewFailure = (test: any): boolean => {
+  const failCount = test?.insights?.extra?.totalResultsFailed as number | undefined
+  return failCount === undefined || failCount === 1
+}
+
 /** Returns the JSON-stringified character length of a candidate ADF document. */
 const adfSize = (content: any[]): number =>
   JSON.stringify({ version: 1, type: 'doc', content }).length
@@ -797,9 +808,31 @@ export const buildDescription = (
     content.push(createHeadingNode('Failed Tests', 3))
 
     const failedTests = results.tests.filter((test) => test.status === 'failed')
+
+    // When newFailuresOnly is enabled, restrict the list to tests that have not
+    // failed in any prior run (totalResultsFailed === 1 or no insights at all).
+    const testsForJira = options?.newFailuresOnly
+      ? failedTests.filter(isNewFailure)
+      : failedTests
+    const recurringCount = failedTests.length - testsForJira.length
+
+    // Inform the reader when some failures were suppressed as recurring
+    if (options?.newFailuresOnly && recurringCount > 0) {
+      content.push(
+        createPanel('info', [
+          createParagraphNode([
+            createTextNode(
+              `Showing ${testsForJira.length} new failure${testsForJira.length === 1 ? '' : 's'} only — ` +
+                `${recurringCount} recurring failure${recurringCount === 1 ? '' : 's'} suppressed (already seen in prior runs)`
+            ),
+          ]),
+        ])
+      )
+    }
+
     let addedFailedCount = 0
 
-    for (const test of failedTests) {
+    for (const test of testsForJira) {
       const rawSuite = (test as any).suite
       const suite: string | undefined = Array.isArray(rawSuite)
         ? (rawSuite as string[]).join(' > ')
@@ -846,9 +879,9 @@ export const buildDescription = (
       }
     }
 
-    // If any tests were omitted, add a truncation note so the reader knows
-    if (addedFailedCount < failedTests.length) {
-      const skipped = failedTests.length - addedFailedCount
+    // If any tests were omitted due to ADF size limit, add a truncation note so the reader knows
+    if (addedFailedCount < testsForJira.length) {
+      const skipped = testsForJira.length - addedFailedCount
       content.push(
         createParagraphNode([
           createTextNode(

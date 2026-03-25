@@ -102,6 +102,12 @@ const sharedOptions = {
     type: 'boolean',
     default: true,
   },
+  newFailuresOnly: {
+    describe:
+      'Only post to Jira when there are new failures (tests that did not fail in any prior run according to CTRF history insights). Recurring failures are suppressed.',
+    type: 'boolean',
+    default: false,
+  },
 } as const
 
 const argv = yargs(hideBin(process.argv))
@@ -147,6 +153,7 @@ const argv = yargs(hideBin(process.argv))
             : undefined,
           updateCtrf: argv.updateCtrf as boolean,
           updateIssue: argv.updateIssue as boolean,
+          newFailuresOnly: argv.newFailuresOnly as boolean,
         }
 
         const issueKey = await postResultsToJira(report, options, true)
